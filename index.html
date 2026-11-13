@@ -57,7 +57,7 @@ footer{text-align:center;color:var(--mut);font-size:13px;padding:30px 16px 90px}
     const cat=v.category||'المنيو';if(!groups.has(cat))groups.set(cat,[]);groups.get(cat).push(v);
    }
    document.getElementById('menu-cats').innerHTML=[...groups.keys()].map((cat,n)=>'<a href="#live-'+n+'">'+esc(cat)+'</a>').join('');
-   document.getElementById('menu-list').innerHTML=[...groups.entries()].map(([cat,rows],n)=>'<section id="live-'+n+'"><h2>'+esc(cat)+'</h2>'+rows.map(v=>'<div class="it"><div><b>'+esc(v.name)+'</b><span>'+esc(translations.get(v.name)||'')+'</span><small>'+esc(v.variant||'عادي')+'</small></div><div class="pr">'+(v.price_fils/1000).toFixed(3)+'<br><a href="order.html" style="font-size:13px">أضف لطلبك</a></div></div>').join('')+'</section>').join('');
+   document.getElementById('menu-list').innerHTML=[...groups.entries()].map(([cat,rows],n)=>'<section id="live-'+n+'"><h2>'+esc(cat)+'</h2>'+rows.map(v=>'<div class="it"><div><b>'+esc(v.name)+'</b><span>'+esc(translations.get(v.name)||'')+'</span><small>'+esc(v.variant||'عادي')+'</small></div><div class="pr">'+(v.price_fils/1000).toFixed(3)+'<br><a href="order.html" style="font-size:13px">اطلب من الموقع</a></div></div>').join('')+'</section>').join('');
    published=true;
    document.getElementById('menu-sync').textContent=groups.size?'الأصناف والأسعار محدثة من المطعم. اختر وجبتك من صفحة الطلب.':'لا توجد أصناف متاحة حالياً. تواصل معنا للاستفسار.';
   }catch{

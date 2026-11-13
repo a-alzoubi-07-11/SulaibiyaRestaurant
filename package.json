@@ -1,0 +1,1 @@
+{"name":"sulaibiya-restaurant-site","private":true,"type":"module","scripts":{"deploy":"wrangler deploy || node scripts/deploy-static.mjs","test":"node --test test/*.test.mjs"},"devDependencies":{"blake3-wasm":"2.1.5","wrangler":"4.161.0"}}

@@ -3,3 +3,8 @@ wrangler.jsonc
 .nojekyll
 .wrangler
 .github
+node_modules
+package.json
+package-lock.json
+scripts
+test
