@@ -22,7 +22,7 @@ main,aside,.head>div,.row>div,input,select,textarea{min-width:0}.row{grid-templa
 <script>
 'use strict';
 const seed=JSON.parse(document.getElementById('catalog').textContent);
-let items=seed.items,category='الكل',search='',config=null,busy=false;
+let items=seed.items,category='الكل',search='',config=null,busy=false,directReady=false,menuLoading=null,reviewRequired=false;
 const cart=new Map(),$=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=p=>(p/1000).toFixed(3)+' د.ك';
@@ -32,29 +32,29 @@ function render(){
  $('cats').innerHTML=cats.map(c=>'<button type="button" data-category="'+esc(c)+'" class="'+(c===category?'selected':'')+'">'+esc(c)+'</button>').join('');
  $('menu').innerHTML=items.filter(i=>(category==='الكل'||i.category===category)&&i.name_ar.includes(search)).map((i)=>{
  const image=i.image?.startsWith('assets/images/')?'/img/'+i.image.split('/').pop():'/img/platter.jpg';
- return '<article class="card"><img src="'+esc(image)+'" loading="lazy" alt="'+esc(i.name_ar)+' — صورة القسم"><div class="body"><h3>'+esc(i.name_ar)+'</h3><small>صورة القسم من موقع المطعم</small><select aria-label="خيار '+esc(i.name_ar)+'" data-item="'+i.sort_order+'">'+i.variants.map(v=>'<option value="'+esc(v.key)+'">'+esc(v.name)+' · '+money(v.price_fils)+'</option>').join('')+'</select><div class="price"><span data-price="'+i.sort_order+'">'+(i.variants[0].price_fils?money(i.variants[0].price_fils):'يؤكد السعر')+'</span><button type="button" class="add" data-add="'+i.sort_order+'" aria-label="إضافة '+esc(i.name_ar)+'" '+(i.review_note?'disabled':'')+'>+</button></div>'+(i.review_note?'<div class="note">السعر أو المقاس يحتاج تأكيد المطعم</div>':'')+'</div></article>';
+ return '<article class="card"><img src="'+esc(image)+'" loading="lazy" alt="'+esc(i.name_ar)+' — صورة القسم"><div class="body"><h3>'+esc(i.name_ar)+'</h3><small>صورة القسم من موقع المطعم</small><select aria-label="خيار '+esc(i.name_ar)+'" data-item="'+i.sort_order+'">'+i.variants.map(v=>'<option value="'+esc(v.key)+'">'+esc(v.name)+' · '+money(v.price_fils)+'</option>').join('')+'</select><div class="price"><span data-price="'+i.sort_order+'">'+(i.variants[0].price_fils?money(i.variants[0].price_fils):'يؤكد السعر')+'</span><button type="button" class="add" data-add="'+i.sort_order+'" aria-label="إضافة '+esc(i.name_ar)+'" '+(i.review_note?'disabled':'')+'>+</button></div>'+(i.review_note?'<div class="note">'+esc(i.review_note)+'</div>':'')+'</div></article>';
  }).join('');
 }
 function renderCart(){
  const lines=[...cart.values()];
- $('lines').innerHTML=lines.map(v=>'<div class="line"><div>'+esc(v.name)+'<br><small>'+esc(v.variant)+' · '+money(v.price)+'</small></div><div><button type="button" data-minus="'+esc(v.key)+'" aria-label="تقليل '+esc(v.name)+'">−</button> '+v.qty+' <button type="button" data-plus="'+esc(v.key)+'" aria-label="زيادة '+esc(v.name)+'">+</button></div></div>').join('');
+ $('lines').innerHTML=lines.map(v=>'<div class="line"><div>'+esc(v.name)+'<br><small>'+esc(v.variant)+' · '+money(v.price)+(v.unavailable?' · غير متاح حالياً':'')+'</small></div><div><button type="button" data-minus="'+esc(v.key)+'" aria-label="تقليل '+esc(v.name)+'">−</button> '+v.qty+' <button type="button" data-plus="'+esc(v.key)+'" aria-label="زيادة '+esc(v.name)+'">+</button></div></div>').join('');
  const count=lines.reduce((a,b)=>a+b.qty,0);
  $('empty').hidden=count>0;$('cartCount').textContent=count?'· '+count+' صنف':'';
  const total=lines.reduce((a,b)=>a+b.price*b.qty,0)+(count && $('type').value==='delivery'?150:0);
  $('total').textContent=money(total);$('jump').textContent='عرض طلبي · '+count+' · '+money(total);
  $('address').style.display=$('type').value==='delivery'?'block':'none';
- $('submit').disabled=busy||!config||count===0;
+ $('submit').disabled=busy||!directReady||count===0||lines.some(v=>v.unavailable);
 }
 document.addEventListener('click',event=>{
  const c=event.target.closest('[data-category]');if(c){category=c.dataset.category;render();}
- const add=event.target.closest('[data-add]');if(add){
+ const add=event.target.closest('[data-add]');if(add&&!busy){
   const i=items.find(x=>x.sort_order===Number(add.dataset.add));const selected=document.querySelector('select[data-item="'+i.sort_order+'"]').value;
   const v=i.variants.find(x=>x.key===selected);if(i.review_note || !v.price_fils)return;
   const previous=cart.get(v.key);cart.set(v.key,{key:v.key,name:i.name_ar,variant:v.name,price:v.price_fils,qty:Math.min(50,(previous?.qty??0)+1)});renderCart();
  }
  const plus=event.target.closest('[data-plus]'),minus=event.target.closest('[data-minus]');
- if(plus){const v=cart.get(plus.dataset.plus);v.qty=Math.min(50,v.qty+1);renderCart();}
- if(minus){const v=cart.get(minus.dataset.minus);if(v.qty<=1)cart.delete(v.key);else v.qty--;renderCart();}
+ if(plus&&!busy){const v=cart.get(plus.dataset.plus);v.qty=Math.min(50,v.qty+1);renderCart();}
+ if(minus&&!busy){const v=cart.get(minus.dataset.minus);if(v.qty<=1)cart.delete(v.key);else v.qty--;renderCart();}
 });
 document.addEventListener('change',e=>{
  if(e.target.matches('select[data-item]')){
@@ -65,7 +65,7 @@ $('search').addEventListener('input',()=>{search=$('search').value.trim();render
 $('type').addEventListener('change',renderCart);
 $('jump').addEventListener('click',()=>$('cart').scrollIntoView({behavior:'smooth'}));
 function order(){
- const lines=[...cart.values()];if(!lines.length)throw Error('اختر أصناف طلبك أولاً');
+ const lines=[...cart.values()];if(!lines.length)throw Error('اختر أصناف طلبك أولاً');if(lines.some(v=>v.unavailable))throw Error('احذف الأصناف غير المتاحة من طلبك أو اختر بديلاً');
  let phone=$('phone').value.replace(/[\s()-]/g,'').replace(/^00965/,'+965');if(/^\d{8}$/.test(phone))phone='+965'+phone;
  if(!/^\+965\d{8}$/.test(phone))throw Error('أدخل رقم هاتف كويتياً من 8 أرقام');
  const name=$('name').value.trim();if(name.length<2)throw Error('أدخل اسمك');
@@ -81,41 +81,70 @@ $('wa').addEventListener('click',()=>{
  }catch(e){status(e.message,true);}
 });
 $('submit').addEventListener('click',async()=>{
- if(busy||!config)return;
+ if(busy||!config||!directReady)return;
+ busy=true;renderCart();
  try{
+  order();
+  await refreshMenu();
+  if([...cart.values()].some(v=>v.unavailable))throw Error('تغير توفر أحد الأصناف؛ احذفه من طلبك أو اختر بديلاً');
+  if(reviewRequired){reviewRequired=false;throw Error('تغير سعر أحد الأصناف. راجع الإجمالي الجديد ثم اضغط إرسال الطلب مجدداً');}
   const o=order();const fingerprint=JSON.stringify(o);
   let pending;try{pending=JSON.parse(localStorage.getItem('sulaibiya-pending-order')??'null');}catch{}
   if(!pending||pending.fingerprint!==fingerprint)pending={id:crypto.randomUUID(),fingerprint};
   localStorage.setItem('sulaibiya-pending-order',JSON.stringify(pending));
-  busy=true;renderCart();status('يجري إرسال الطلب…');
+  status('يجري إرسال الطلب…');
   const url=new URL(config.endpoint);url.searchParams.set('site_key',config.site_key);
   const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'website_order',site_key:config.site_key,order:{...o,request_id:pending.id}}),signal:AbortSignal.timeout(15000)});
   const result=await res.json();
-  if(!res.ok||!result.received)throw Error(({RESTAURANT_OFFLINE:'الطلب المباشر غير متاح حالياً. يمكنك التواصل عبر واتساب.',RATE_LIMIT:'وصلت طلبات كثيرة؛ انتظر قليلاً ثم حاول مجدداً.',ITEM_UNAVAILABLE:'تغير توفر أحد الأصناف؛ أعد تحميل المنيو.'})[result.error]??'تعذر تأكيد الاستلام. يمكنك إعادة المحاولة بالطلب نفسه أو التواصل عبر واتساب.');
+  if(!res.ok||!result.received)throw Error(({RESTAURANT_OFFLINE:'الطلب المباشر غير متاح حالياً. يمكنك التواصل عبر واتساب.',RATE_LIMIT:'وصلت طلبات كثيرة؛ انتظر قليلاً ثم حاول مجدداً.',ITEM_UNAVAILABLE:'تغير توفر أحد الأصناف؛ راجع المنيو واختر بديلاً.'})[result.error]??'تعذر تأكيد الاستلام. يمكنك إعادة المحاولة بالطلب نفسه أو التواصل عبر واتساب.');
   status('وصل طلبك إلى قائمة المطعم، بانتظار المراجعة. المرجع: '+result.reference+' · الإجمالي: '+money(result.total_fils));
   cart.clear();localStorage.removeItem('sulaibiya-pending-order');
  }catch(e){status(e.message,true);}finally{busy=false;renderCart();}
 });
+function refreshMenu(){
+ if(menuLoading)return menuLoading;
+ menuLoading=(async()=>{
+  if(!config)throw Error('الطلب المباشر قيد التفعيل');
+  const endpoint=new URL(config.endpoint);endpoint.searchParams.set('site_key',config.site_key);
+  const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'menu',site_key:config.site_key}),signal:AbortSignal.timeout(10000)});
+  if(!res.ok)throw Error();
+  const live=await res.json();if(!Array.isArray(live.items))throw Error();
+  const rows=live.items.filter(v=>typeof v.catalog_key==='string'&&typeof v.name==='string'&&Number.isSafeInteger(v.price_fils)&&v.price_fils>0);
+  const byKey=new Map(rows.map(v=>[v.catalog_key,v]));
+  for(const line of cart.values()){
+   const next=byKey.get(line.key);line.unavailable=!next||next.available!==true;
+   if(next){if(line.price!==next.price_fils)reviewRequired=true;line.price=next.price_fils;line.name=next.name;line.variant=next.variant;}
+  }
+  const seeded=new Map(seed.items.flatMap(i=>i.variants.map(v=>[v.key,i])));
+  items=rows.map((v,n)=>({sort_order:n+1,name_ar:v.name,category:v.category||seeded.get(v.catalog_key)?.category||'المنيو',image:seeded.get(v.catalog_key)?.image,review_note:v.available===true?null:'غير متاح حالياً',variants:[{key:v.catalog_key,name:v.variant||'عادي',price_fils:v.price_fils}]}));
+  if(category!=='الكل'&&!items.some(i=>i.category===category))category='الكل';
+  directReady=rows.some(v=>v.available===true);
+  render();renderCart();
+ })().catch(()=>{directReady=false;renderCart();throw Error('تعذر تحديث المنيو. تحقق من الاتصال وأعد المحاولة أو تواصل عبر واتساب.');}).finally(()=>{menuLoading=null;});
+ return menuLoading;
+}
+async function quietRefresh(){
+ if(!config||document.hidden||busy)return;
+ try{
+  const wasReady=directReady;await refreshMenu();
+  if([...cart.values()].some(v=>v.unavailable))status('أحد أصناف طلبك غير متاح حالياً. احذفه أو اختر بديلاً.',true);
+  else if(reviewRequired)status('تغير سعر أحد الأصناف؛ راجع إجمالي طلبك قبل الإرسال.',true);
+  else if(!directReady)status('لا توجد أصناف متاحة للطلب حالياً. يمكنك التواصل عبر واتساب.');
+  else if(!wasReady)status('الطلب المباشر متاح عند اتصال كاشير المطعم.');
+ }catch(e){status(e.message,true);}
+}
 async function connect(){
  try{
   const v=await fetch('/order-config.json',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject());
   const url=new URL(v.endpoint);if(url.protocol!=='https:'||!v.site_key)throw Error();
-  config=v;
-  const endpoint=new URL(v.endpoint);endpoint.searchParams.set('site_key',v.site_key);
-  const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'menu',site_key:v.site_key}),signal:AbortSignal.timeout(10000)});
-  if(!res.ok)throw Error();
-  const live=await res.json();
-   if(!Array.isArray(live.items)||!live.items.some(v=>v.available&&Number.isSafeInteger(v.price_fils)&&v.price_fils>0))throw Error();
-  if(live.items?.length){
-   const seeded=new Map(seed.items.flatMap(i=>i.variants.map(v=>[v.key,i])));
-   items=live.items.map((v,n)=>({sort_order:n+1,name_ar:v.name,category:v.category||seeded.get(v.catalog_key)?.category||'المنيو',image:seeded.get(v.catalog_key)?.image,review_note:v.available?null:'غير متاح حالياً',variants:[{key:v.catalog_key,name:v.variant,price_fils:v.price_fils}]}));
-   render();
-  }
-  status('الطلب المباشر متاح عند اتصال كاشير المطعم. الطلب بانتظار المراجعة حتى يؤكده المطعم.');
+  config=v;await refreshMenu();
+  status(directReady?'الطلب المباشر متاح عند اتصال كاشير المطعم. الطلب بانتظار المراجعة حتى يؤكده المطعم.':'الطلب المباشر قيد التفعيل. لا توجد أصناف متاحة حالياً؛ يمكنك التواصل عبر واتساب.');
  }catch{
-  config=null;status('الطلب المباشر قيد التفعيل. يمكنك الآن إرسال طلبك عبر واتساب.');
+  directReady=false;status('الطلب المباشر قيد التفعيل. يمكنك الآن إرسال طلبك عبر واتساب.');
  }
  renderCart();
 }
+setInterval(quietRefresh,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)quietRefresh();});
 render();renderCart();connect();
 </script></body></html>
